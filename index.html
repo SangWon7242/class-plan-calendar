@@ -49,6 +49,22 @@
       </div>
     </section>
 
+    <section class="block">
+      <h2>과정 데이터</h2>
+      <p class="hint" id="catInfo"></p>
+      <div class="row">
+        <label class="btn" id="catUpload">새 달 데이터 올리기<input type="file" id="catFile" accept=".xlsx,.xls" class="sr"></label>
+        <button type="button" class="btn" id="catDownload">내려받기</button>
+      </div>
+      <button type="button" class="link" id="catReset" hidden>처음 데이터로 되돌리기</button>
+      <div class="status" id="catStatus" role="status" aria-live="polite"></div>
+      <details class="format">
+        <summary>매달 이렇게 바꿔요</summary>
+        <p><b>내려받기</b>로 현재 과정 데이터 엑셀을 받아, 이번 달 필독서와 수업 계획으로 고친 뒤 <b>새 달 데이터 올리기</b>로 다시 올리면 돼요. 한 줄이 한 차시예요.</p>
+        <p>올린 데이터는 이 브라우저에 저장돼요. 다른 컴퓨터에서는 다시 올려야 해요.</p>
+      </details>
+    </section>
+
     <section class="block bottom">
       <button type="button" class="btn primary" id="saveAll" hidden>전체 저장 (ZIP)</button>
       <p class="hint">이미지는 이 브라우저 안에서만 만들어지고, 파일은 어디에도 올라가지 않아요.</p>
@@ -67,6 +83,7 @@
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="vendor/jszip.min.js"></script>
 <script src="data/catalog.js"></script>
+<script src="js/catalog.js"></script>
 <script src="js/parse.js"></script>
 <script src="js/poster.js"></script>
 <script src="js/app.js"></script>

@@ -1,8 +1,9 @@
 (function () {
   const $ = id => document.getElementById(id);
-  const CATALOG = window.CATALOG;
+  const DEFAULT_CATALOG = window.CATALOG;
+  let CATALOG = Catalog.load() || DEFAULT_CATALOG;
   const DEFAULT_FOOTER = "차시별 진행 수업은 함께 보내드린\n수업계획안을 참고해주세요~";
-  const state = { classes: [], example: true, theme: "green", year: new Date().getFullYear(), footer: DEFAULT_FOOTER, plan: true, rawGroups: [] };
+  const state = { classes: [], example: true, theme: "green", year: CATALOG.year, footer: DEFAULT_FOOTER, plan: true, rawGroups: [] };
 
   /* ---------- 설정 패널 ---------- */
   $("year").value = state.year;
@@ -183,11 +184,48 @@
   });
 
   /* ---------- 예시 ---------- */
-  const ci = Plan.matchCourse("세계문화지리", CATALOG);
-  const exClass = { names: [], time: "목요일 4시 50분 ~ 6시 10분", titleEdited: true, title: "세계문화,지리",
-    segs: [{ stage: "세계문화지리", course: ci, dates: [5, 12, 19, 26].map(d => ({ y: state.year, m: CATALOG.month, d })) }] };
-  Plan.derive(exClass, CATALOG);
-  state.classes = [exClass];
+  function makeExample() {
+    const ci = Math.max(0, Plan.matchCourse("세계문화지리", CATALOG));
+    const course = CATALOG.courses[ci];
+    const thu = []; for (let d = 1, last = new Date(CATALOG.year, CATALOG.month, 0).getDate(); d <= last && thu.length < 4; d++)
+      if (new Date(CATALOG.year, CATALOG.month - 1, d).getDay() === 4) thu.push({ y: CATALOG.year, m: CATALOG.month, d });
+    const ex = { names: [], time: "목요일 4시 50분 ~ 6시 10분", titleEdited: true, title: course.name === "세계문화지리" ? "세계문화,지리" : course.name,
+      segs: [{ stage: course.name, course: ci, dates: thu }] };
+    return Plan.derive(ex, CATALOG);
+  }
+
+  /* ---------- 과정 데이터 교체 ---------- */
+  function catInfo() {
+    const custom = CATALOG !== DEFAULT_CATALOG;
+    $("catInfo").textContent = CATALOG.year + "년 " + CATALOG.month + "월 · 과정 " + CATALOG.courses.length + "개" + (custom ? " (직접 올린 데이터)" : " (기본 데이터)");
+    $("catReset").hidden = !custom;
+  }
+  function setCatalog(cat) {
+    CATALOG = cat; state.year = cat.year; $("year").value = cat.year;
+    if (state.example) state.classes = [makeExample()];
+    else state.classes = state.rawGroups.map(g => Plan.buildClass(g, state.year, CATALOG));
+    catInfo(); return renderAll();
+  }
+  function catStatus(msg, kind) { const e = $("catStatus"); e.textContent = msg; e.className = "status" + (kind ? " " + kind : ""); }
+
+  $("catDownload").addEventListener("click", () => {
+    XLSX.writeFile(Catalog.toWorkbook(CATALOG), "과정데이터_" + CATALOG.year + "년" + CATALOG.month + "월.xlsx");
+  });
+  $("catFile").addEventListener("change", async e => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    try {
+      const cat = Catalog.fromWorkbook(await f.arrayBuffer(), CATALOG);
+      const saved = Catalog.save(cat);
+      await setCatalog(cat);
+      catStatus(cat.year + "년 " + cat.month + "월 과정 " + cat.courses.length + "개를 불러왔어요." + (saved ? "" : " (이 브라우저에 저장하지는 못했어요)"), "ok");
+    } catch (err) { catStatus("불러오지 못했어요. " + (err.message || ""), "err"); }
+  });
+  $("catReset").addEventListener("click", async () => {
+    Catalog.reset(); await setCatalog(DEFAULT_CATALOG); catStatus("처음 데이터로 되돌렸어요.", "ok");
+  });
+
+  state.classes = [makeExample()];
+  catInfo();
   renderAll();
-  window.__app = { state, handleFile };
+  window.__app = { state, handleFile, setCatalog, get catalog() { return CATALOG; } };
 })();

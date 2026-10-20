@@ -141,3 +141,7 @@ select:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
   .block.bottom{margin-top:0}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row .btn{flex:1;text-align:center;white-space:nowrap;font-size:14px;padding:9px 12px}
+label.btn:focus-within{outline:3px solid var(--focus);outline-offset:2px}
