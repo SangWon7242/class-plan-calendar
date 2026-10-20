@@ -1,7 +1,8 @@
 (function () {
   const $ = id => document.getElementById(id);
+  const CATALOG = window.CATALOG;
   const DEFAULT_FOOTER = "차시별 진행 수업은 함께 보내드린\n수업계획안을 참고해주세요~";
-  const state = { classes: [], example: true, theme: "green", year: new Date().getFullYear(), footer: DEFAULT_FOOTER, rawGroups: [] };
+  const state = { classes: [], example: true, theme: "green", year: new Date().getFullYear(), footer: DEFAULT_FOOTER, plan: true, rawGroups: [] };
 
   /* ---------- 설정 패널 ---------- */
   $("year").value = state.year;
@@ -20,6 +21,7 @@
     themesBox.querySelectorAll(".swatch").forEach(s => s.setAttribute("aria-checked", String(s === b)));
     redrawAll();
   });
+  $("plan").addEventListener("change", e => { state.plan = e.target.checked; redrawAll(); });
   $("footer").addEventListener("input", e => { state.footer = e.target.value; redrawAll(); });
   $("year").addEventListener("change", e => {
     const y = parseInt(e.target.value, 10);
@@ -30,7 +32,7 @@
 
   /* ---------- 렌더링 ---------- */
   let raf = 0;
-  const opts = () => ({ theme: state.theme, footer: state.footer });
+  const opts = () => ({ theme: state.theme, footer: state.footer, plan: state.plan });
   function redraw(c) { Poster.render(c, opts(), c.canvas); }
   function redrawAll() {
     cancelAnimationFrame(raf);
@@ -47,31 +49,56 @@
     return (m + "_수업계획서_" + (c.names.join("_") || c.title || "반")).normalize("NFKC").replace(/[\\/:*?"<>|\s]+/g, "_") + ".png";
   }
 
+  const esc = t => String(t ?? "").replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+
+  function courseOptions(sel) {
+    return '<option value="-1"' + (sel < 0 ? " selected" : "") + ">과정을 골라 주세요</option>" +
+      [["monthly", CATALOG.month + "월 과정"], ["series", "호별 과정"]].map(([k, lab]) => '<optgroup label="' + lab + '">' +
+        CATALOG.courses.map((c, i) => c.kind === k ? '<option value="' + i + '"' + (i === sel ? " selected" : "") + ">" + esc(c.name) + "</option>" : "").join("") + "</optgroup>").join("");
+  }
+
+  function warnings(c) {
+    const w = [];
+    if (c.missing.length) w.push("'" + c.missing.join("', '") + "' 단계와 맞는 과정을 찾지 못했어요. 아래에서 과정을 골라 주세요.");
+    const extra = c.segs.filter(s => CATALOG.courses[s.course] && s.dates.length > CATALOG.courses[s.course].sessions.length).map(s => CATALOG.courses[s.course].name);
+    if (extra.length) w.push(extra.join(", ") + " 수업일이 등록된 차시보다 많아요. 넘치는 날은 '책 정보 없음'으로 나와요.");
+    if (c.noDates.length) w.push("'" + c.noDates.join("', '") + "' 줄의 수업일을 읽지 못했어요. '11월 3일,10일'처럼 적어 주세요.");
+    return w;
+  }
+
   function cardEl(c, i) {
     const el = document.createElement("article"); el.className = "card";
+    const segs = c.segs.map((s, si) =>
+      '<div class="seg"><span class="seg-name">' + esc(s.stage || "단계 없음") + '</span><label class="sr" for="crs-' + i + "-" + si + '">과정</label>' +
+      '<select id="crs-' + i + "-" + si + '" data-s="' + si + '">' + courseOptions(s.course) + "</select></div>").join("");
     el.innerHTML =
-      '<div class="poster-wrap"></div><div class="warn" hidden></div>' +
+      '<div class="poster-wrap"></div>' + warnings(c).map(w => '<div class="warn">' + esc(w) + "</div>").join("") +
       '<div class="card-meta"><p class="names"></p><span class="dates"></span></div>' +
       '<div class="edit">' +
       '<div class="field wide"><label for="t-' + i + '">제목</label><input type="text" id="t-' + i + '" data-k="title"></div>' +
       '<div class="field wide"><label for="m-' + i + '">수업 시간</label><input type="text" id="m-' + i + '" data-k="time"></div>' +
+      '<div class="field wide"><span class="lbl">과정 (차시별 계획을 가져와요)</span><div class="segs">' + segs + "</div></div>" +
       '</div><div class="card-actions"><button type="button" class="btn primary" data-save>이미지 저장</button></div>';
     c.canvas = document.createElement("canvas");
     c.canvas.setAttribute("role", "img");
     el.querySelector(".poster-wrap").appendChild(c.canvas);
     el.querySelector(".names").textContent = c.names.join(", ") || "예시 반";
     el.querySelector(".dates").textContent = dateSummary(c);
-    if (c.noDates.length) {
-      const w = el.querySelector(".warn"); w.hidden = false;
-      w.textContent = "'" + c.noDates.join("', '") + "' 줄의 수업일을 읽지 못했어요. '11월 3일,10일'처럼 적어 주세요.";
-    }
     el.querySelector("#t-" + i).value = c.title;
     el.querySelector("#m-" + i).value = c.time;
     c.canvas.setAttribute("aria-label", (c.title || "수업") + " 수업계획서 미리보기");
     el.addEventListener("input", e => {
       const k = e.target.dataset.k; if (!k) return;
-      c[k] = e.target.value; redraw(c);
+      c[k] = e.target.value; if (k === "title") c.titleEdited = true;
+      redraw(c);
       if (k === "title") c.canvas.setAttribute("aria-label", c.title + " 수업계획서 미리보기");
+    });
+    el.addEventListener("change", e => {
+      if (e.target.tagName !== "SELECT") return;
+      c.segs[+e.target.dataset.s].course = +e.target.value;
+      Plan.derive(c, CATALOG);
+      if (!c.titleEdited) c.title = c.autoTitle;
+      renderAll();
     });
     el.querySelector("[data-save]").addEventListener("click", async e => {
       const b = e.currentTarget, old = b.textContent; b.disabled = true;
@@ -114,7 +141,7 @@
   function setStatus(msg, kind) { const s = $("status"); s.textContent = msg; s.className = "status" + (kind ? " " + kind : ""); }
 
   function rebuildFromGroups() {
-    state.classes = state.rawGroups.map(g => Plan.buildClass(g, state.year));
+    state.classes = state.rawGroups.map(g => Plan.buildClass(g, state.year, CATALOG));
     return renderAll();
   }
 
@@ -156,11 +183,11 @@
   });
 
   /* ---------- 예시 ---------- */
-  const y = state.year;
-  state.classes = [{
-    names: [], title: "세계문화,지리", time: "목요일 4시 50분 ~ 6시 10분", noDates: [],
-    days: [5, 12, 19, 26].map(d => ({ y, m: 11, d }))
-  }];
+  const ci = Plan.matchCourse("세계문화지리", CATALOG);
+  const exClass = { names: [], time: "목요일 4시 50분 ~ 6시 10분", titleEdited: true, title: "세계문화,지리",
+    segs: [{ stage: "세계문화지리", course: ci, dates: [5, 12, 19, 26].map(d => ({ y: state.year, m: CATALOG.month, d })) }] };
+  Plan.derive(exClass, CATALOG);
+  state.classes = [exClass];
   renderAll();
   window.__app = { state, handleFile };
 })();

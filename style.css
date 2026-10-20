@@ -82,6 +82,14 @@ input[type=number],input[type=text],textarea{
 textarea{resize:vertical;line-height:1.5}
 input:focus-visible,textarea:focus-visible,button:focus-visible,summary:focus-visible,.link:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
 
+.check{display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
+.check input{width:18px;height:18px;accent-color:var(--accent)}
+.segs{display:flex;flex-direction:column;gap:8px}
+.seg{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:8px;align-items:center}
+.seg-name{font-weight:700;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+select:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .swatches{display:flex;gap:10px}
 .swatch{
   position:relative;width:36px;height:36px;border-radius:50%;cursor:pointer;border:0;padding:0;

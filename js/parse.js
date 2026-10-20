@@ -80,17 +80,49 @@
     return groups.filter(g => g.segs.length);
   }
 
-  /* group → 포스터 데이터 */
-  function buildClass(g, year) {
-    const marks = [];
-    g.segs.forEach(s => parseDates(s.dates, year).forEach(d => marks.push(d)));
-    const t = d => Date.UTC(d.y, d.m - 1, d.d);
-    marks.sort((a, b) => t(a) - t(b));
-    const seen = new Set();
-    const days = marks.filter(d => { const k = t(d); if (seen.has(k)) return false; seen.add(k); return true; });
-    const title = [...new Set(g.segs.map(s => s.stage).filter(Boolean))].join(", ");
-    return { names: g.names, title, time: g.time, days, noDates: g.segs.filter(s => !parseDates(s.dates, year).length).map(s => s.stage) };
+  /* 단계 이름 → 과정 번호(없으면 -1). 호수·단계 표기 차이는 느슨하게 맞춰요 */
+  function matchCourse(stage, catalog) {
+    const n = norm(stage);
+    if (!n) return -1;
+    let i = catalog.courses.findIndex(c => c.aliases.some(a => norm(a) === n) || norm(c.name) === n);
+    if (i >= 0) return i;
+    const loose = s => norm(s).replace(/단계/g, "").replace(/호$/, "");
+    const l = loose(stage);
+    return catalog.courses.findIndex(c => c.aliases.some(a => loose(a) === l) || loose(c.name) === l);
   }
 
-  g.Plan = { WD, parseDates, formatTime, readRows, groupRows, buildClass };
+  /* segs(과정+날짜) → days(달력 표시일)·sessions(차시별 카드)·기본 제목 */
+  function derive(c, catalog) {
+    const t = d => Date.UTC(d.y, d.m - 1, d.d);
+    const multi = c.segs.length > 1, rows = [];
+    c.segs.forEach(s => {
+      const course = catalog.courses[s.course];
+      s.dates.slice().sort((a, b) => t(a) - t(b)).forEach((d, i) => {
+        const se = course && course.sessions[i];
+        rows.push({ ...d, course: course ? course.name : (s.stage || "과정"), no: (i + 1) + "차시",
+          label: course ? (course.label || "교과연계") : "교과연계",
+          tag: se ? se.tag : "", book: se ? se.book : "", desc: se ? se.desc : "", link: se ? (se.link || "") : "" });
+      });
+    });
+    rows.sort((a, b) => t(a) - t(b));
+    const seen = new Set();
+    c.sessions = rows.filter(r => { const k = t(r); if (seen.has(k)) return false; seen.add(k); return true; });
+    c.sessions.forEach(r => { r.wd = WD[new Date(r.y, r.m - 1, r.d).getDay()]; r.lab = multi ? r.course + " " + r.no : r.no; });
+    c.days = c.sessions.map(r => ({ y: r.y, m: r.m, d: r.d }));
+    c.autoTitle = [...new Set(c.segs.map(s => catalog.courses[s.course]?.name || s.stage).filter(Boolean))].join(", ");
+    c.noDates = c.segs.filter(s => !s.dates.length).map(s => s.stage);
+    c.missing = c.segs.filter(s => s.course < 0).map(s => s.stage);
+    return c;
+  }
+
+  /* group → 포스터 데이터 */
+  function buildClass(g, year, catalog) {
+    const segs = g.segs.map(s => ({ stage: s.stage, course: matchCourse(s.stage, catalog), dates: parseDates(s.dates, year) }));
+    const c = { names: g.names, time: g.time, segs, titleEdited: false };
+    derive(c, catalog);
+    c.title = c.autoTitle;
+    return c;
+  }
+
+  g.Plan = { WD, parseDates, formatTime, readRows, groupRows, buildClass, derive, matchCourse };
 })(window);

@@ -104,7 +104,70 @@
     return { bottom: gy + rows * rh, next: no };
   }
 
-  /* data: {title,time,days:[{y,m,d}]}, opts: {theme, footer} → canvas */
+  /* 글자를 폭에 맞게 줄바꿈 (공백 우선, 길면 글자 단위) */
+  function wrap(ctx, text, maxW, firstOffset) {
+    const lines = []; let line = "", off = firstOffset || 0;
+    const fits = t => ctx.measureText(t).width <= maxW - (lines.length ? 0 : off);
+    for (const word of String(text || "").split(/\s+/).filter(Boolean)) {
+      const t = line ? line + " " + word : word;
+      if (fits(t)) { line = t; continue; }
+      if (line) { lines.push(line); line = ""; }
+      if (fits(word)) { line = word; continue; }
+      for (const ch of word) { if (fits(line + ch)) line += ch; else { lines.push(line); line = ch; } }
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  const CARD = { x: 68, w: 949, pad: 28, badge: 32, gap: 24 };
+  CARD.tx = CARD.x + CARD.pad + CARD.badge * 2 + CARD.gap;
+  CARD.tw = CARD.x + CARD.w - CARD.pad - CARD.tx;
+
+  /* 카드 한 장의 줄 구성과 높이를 먼저 계산해요 */
+  function measureCard(ctx, r) {
+    ctx.font = sans(800, 34); const book = wrap(ctx, r.book || "책 정보 없음", CARD.tw);
+    ctx.font = sans(500, 26); const desc = wrap(ctx, r.desc, CARD.tw);
+    let link = [], labW = 0;
+    if (r.link) { ctx.font = sans(700, 22); labW = ctx.measureText(r.label).width + 14; ctx.font = sans(500, 22); link = wrap(ctx, r.link, CARD.tw, labW); }
+    const h = Math.max(150, CARD.pad + 32 + 10 + book.length * 44 + (desc.length ? 8 + desc.length * 38 : 0) + (link.length ? 12 + link.length * 31 : 0) + CARD.pad - 4);
+    return { book, desc, link, labW, h };
+  }
+
+  function drawCard(ctx, th, y, r, n, m) {
+    ctx.fillStyle = "#fff"; ctx.strokeStyle = "#dedfdc"; ctx.lineWidth = 2;
+    rr(ctx, CARD.x, y, CARD.w, m.h, 26); ctx.fill(); ctx.stroke();
+    const bx = CARD.x + CARD.pad + CARD.badge, by = y + CARD.pad + CARD.badge - 2;
+    ctx.fillStyle = th.tag; ctx.beginPath(); ctx.arc(bx, by, CARD.badge, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.font = sans(800, 32); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(String(n), bx, by + 2);
+
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    let ty = y + CARD.pad + 24;
+    const meta = r.m + "월 " + r.d + "일(" + r.wd + ") · " + r.lab;
+    ctx.fillStyle = "#5b6560"; ctx.font = sans(500, 24); ctx.fillText(meta, CARD.tx, ty);
+    if (r.tag) {
+      const mw = ctx.measureText(meta).width;
+      ctx.font = sans(700, 20); const tw = ctx.measureText(r.tag).width;
+      const px = CARD.tx + mw + 14, pw = Math.min(tw + 24, CARD.tw - mw - 14);
+      if (pw > 40) { ctx.fillStyle = th.tag + "1f"; rr(ctx, px, ty - 25, pw, 34, 17); ctx.fill(); ctx.fillStyle = th.tag; ctx.fillText(r.tag, px + 12, ty - 1); }
+    }
+    ty += 12;
+    ctx.font = sans(800, 34); ctx.fillStyle = r.book ? "#16181a" : "#b3b8b4";
+    m.book.forEach(l => { ty += 44; ctx.fillText(l, CARD.tx, ty - 8); });
+    if (m.desc.length) { ty += 8; ctx.font = sans(500, 26); ctx.fillStyle = "#3a3f3c"; m.desc.forEach(l => { ty += 38; ctx.fillText(l, CARD.tx, ty - 9); }); }
+    if (m.link.length) {
+      ty += 12;
+      m.link.forEach((l, i) => {
+        ty += 31;
+        if (i === 0) { ctx.font = sans(700, 22); ctx.fillStyle = "#44504a"; ctx.fillText(r.label, CARD.tx, ty - 8); }
+        ctx.font = sans(500, 22); ctx.fillStyle = "#6b756f"; ctx.fillText(l, CARD.tx + (i === 0 ? m.labW : 0), ty - 8);
+      });
+    }
+  }
+
+  const scratch = document.createElement("canvas").getContext("2d");
+
+  /* data: {title,time,days,sessions}, opts: {theme, footer, plan} → canvas */
   function render(data, opts, canvas) {
     const th = THEMES[opts.theme] || THEMES.green;
     const months = [...new Map(data.days.map(d => [d.y * 100 + d.m, { y: d.y, m: d.m }])).values()];
@@ -118,6 +181,10 @@
       cursor = top + 173 + rows * 86 + 44;
       return { m, top };
     });
+    const sessions = opts.plan && data.sessions ? data.sessions : [];
+    const measured = sessions.map(r => measureCard(scratch, r));
+    const secY = cursor + 6;
+    if (sessions.length) cursor = secY + 86 + measured.reduce((a, m) => a + m.h + 22, 0) + 10;
     const footLines = String(opts.footer || "").split(/\r?\n/).filter(Boolean);
     const footY = Math.max(1145, cursor + 62);
     const H = Math.max(1350, footY + footLines.length * 44 + 130);
@@ -133,19 +200,26 @@
     ctx.fillText(title, 108, 244);
 
     const time = data.time || "수업 시간";
-    const tpx = fitText(ctx, time, 700, 54, 830, 28);
+    fitText(ctx, time, 700, 54, 830, 28);
     const tw = ctx.measureText(time).width;
     ctx.fillStyle = th.hl; rr(ctx, 96, 282, tw + 24, 82, 16); ctx.fill();
-    ctx.fillStyle = "#111"; ctx.textBaseline = "middle"; ctx.fillText(time, 108, 324 + 3); ctx.textBaseline = "alphabetic";
-    void tpx;
+    ctx.fillStyle = "#111"; ctx.textBaseline = "middle"; ctx.fillText(time, 108, 327); ctx.textBaseline = "alphabetic";
 
     let no = 1;
     const byMonth = new Map();
     data.days.forEach(d => { const k = d.y * 100 + d.m; if (!byMonth.has(k)) byMonth.set(k, new Set()); byMonth.get(k).add(d.d); });
     layout.forEach(({ m, top }) => { no = drawMonth(ctx, th, top, m, no, byMonth.get(m.y * 100 + m.m) || new Set()).next; });
 
+    /* 차시별 수업 계획 */
+    if (sessions.length) {
+      ctx.textAlign = "left"; ctx.fillStyle = "#111"; ctx.font = sans(800, 40);
+      ctx.fillText("차시별 수업 계획", CARD.x + 6, secY + 52);
+      let cy = secY + 86;
+      sessions.forEach((r, i) => { drawCard(ctx, th, cy, r, i + 1, measured[i]); cy += measured[i].h + 22; });
+    }
+
     /* 안내 문구 */
-    ctx.textAlign = "center"; ctx.fillStyle = "#1a1a1a"; ctx.font = sans(700, 32);
+    ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillStyle = "#1a1a1a"; ctx.font = sans(700, 32);
     const widest = Math.max(0, ...footLines.map(l => ctx.measureText(l).width));
     footLines.forEach((l, i) => ctx.fillText(l, W / 2 + 20, footY + i * 44));
     if (footLines.length) {
