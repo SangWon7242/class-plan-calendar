@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>달력 수업계획서 만들기</title>
+<meta name="description" content="엑셀 회원 정리표를 올리면 반마다 달력형 수업계획서 이미지를 자동으로 만들어 PNG로 저장해요.">
+<link rel="preload" href="fonts/PretendardVariable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="panel" aria-label="설정">
+    <header class="brand">
+      <h1>달력 수업계획서</h1>
+      <p>엑셀을 올리면 반마다 학부모님께 보낼 달력 이미지가 만들어져요.</p>
+    </header>
+
+    <section class="block">
+      <h2>엑셀 올리기</h2>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept=".xlsx,.xls,.csv">
+        <strong>엑셀 파일을 선택하세요</strong>
+        <span>또는 여기로 끌어다 놓기</span>
+      </label>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+      <details class="format">
+        <summary>엑셀은 이렇게 적어요</summary>
+        <p>첫 줄에 <code>No</code> <code>이름</code> <code>수업요일</code> <code>단계</code> <code>수업일</code> 제목이 있어야 해요. 같은 반 친구는 이름만 아래 줄에 이어서 적거나 No를 같게 해요.</p>
+        <p>수업일은 <code>11월 3일,10일,17일,24일</code>처럼 적어요. 두 과정을 번갈아 하는 반은 과정마다 한 줄씩 적어요.</p>
+        <button type="button" class="link" id="template">양식 내려받기</button>
+      </details>
+    </section>
+
+    <section class="block">
+      <h2>모양 정하기</h2>
+      <div class="field">
+        <label for="year">연도</label>
+        <input type="number" id="year" min="2000" max="2100" step="1">
+      </div>
+      <div class="field">
+        <span class="lbl" id="themeLbl">색상</span>
+        <div class="swatches" role="radiogroup" aria-labelledby="themeLbl" id="themes"></div>
+      </div>
+      <div class="field">
+        <label for="footer">하단 안내 문구</label>
+        <textarea id="footer" rows="2"></textarea>
+      </div>
+    </section>
+
+    <section class="block bottom">
+      <button type="button" class="btn primary" id="saveAll" hidden>전체 저장 (ZIP)</button>
+      <p class="hint">이미지는 이 브라우저 안에서만 만들어지고, 파일은 어디에도 올라가지 않아요.</p>
+    </section>
+  </aside>
+
+  <main class="stage" aria-label="미리보기">
+    <div class="stage-head">
+      <h2 id="stageTitle">예시</h2>
+      <span class="count" id="stageCount"></span>
+    </div>
+    <div class="grid" id="cards"></div>
+  </main>
+</div>
+
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script src="js/parse.js"></script>
+<script src="js/poster.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
